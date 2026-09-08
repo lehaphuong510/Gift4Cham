@@ -29,6 +29,13 @@ st.markdown("""
 
 st.markdown("<h1 style='text-align: center; color: #8B0000; margin-bottom: 10px;'>🎁 GIFT FOR DONOR</h1>", unsafe_allow_html=True)
 
+# Hiển thị thông báo thành công sau khi rerun
+if st.session_state.get('show_success', False):
+    st.snow()
+    st.toast("🌱 Khởi đầu mới! Chốt đơn thành công! 🌿", icon="🌱")
+    st.success(f"✅ {st.session_state.get('success_msg', 'ĐÃ LƯU HỆ THỐNG THÀNH CÔNG!')} Cảm ơn bạn rất nhiều 💖")
+    st.session_state['show_success'] = False
+
 # Nút Refresh
 col_rf1, col_rf2 = st.columns([1, 3])
 with col_rf1:
@@ -89,23 +96,37 @@ try:
     df_app, df_dvhc = load_data()
     # Lấy danh sách Hành chính
     danh_sach_tinh = df_dvhc['Tỉnh thành'].dropna().unique().tolist()
-    danh_sach_tinh = [t for t in danh_sach_tinh if str(t).strip() != '']
+    danh_sach_tinh = [str(t).strip() for t in danh_sach_tinh if str(t).strip() != '']
     dict_phuong_xa = {}
     for tinh in danh_sach_tinh:
         phuong = df_dvhc[df_dvhc['Tỉnh thành'] == tinh]['Phường xã'].dropna().unique().tolist()
-        dict_phuong_xa[tinh] = [p for p in phuong if str(p).strip() != '']
+        dict_phuong_xa[tinh] = [str(p).strip() for p in phuong if str(p).strip() != '']
 except Exception as e:
     st.error("Đang có lỗi kết nối dữ liệu. Vui lòng thử lại sau!")
     st.stop()
+
+# Hàm so khớp dropdown siêu an toàn
+def find_index_safe(options_list, val):
+    val_clean = str(val).strip().lower()
+    for i, opt in enumerate(options_list):
+        if str(opt).strip().lower() == val_clean:
+            return i
+    return 0
 
 tab1, tab2 = st.tabs(["🔍 XÁC NHẬN ĐƠN HÀNG", "🔒 ADMIN"])
 
 # ================= TAB 1: USER CONFIRM =================
 with tab1:
     st.markdown("### Nhập SĐT để kiểm tra phần quà của bạn")
-    phone_input = st.text_input("Nhập số điện thoại của bạn:", placeholder="Ví dụ: 0901234567")
+    
+    # Quản lý state cho ô tìm kiếm
+    if 'phone_query' not in st.session_state:
+        st.session_state['phone_query'] = ""
+        
+    st.text_input("Nhập số điện thoại của bạn:", key="phone_query", placeholder="Ví dụ: 0901234567")
     
     if st.button("KIỂM TRA 🚀", type="primary"):
+        phone_input = st.session_state['phone_query']
         if phone_input:
             clean_input = phone_input.strip().lstrip('0')
             df_app['Phone_Compare'] = df_app['SDT'].astype(str).str.lstrip('0')
@@ -164,7 +185,6 @@ with tab1:
         st.markdown("<div class='section-title'>📍 THÔNG TIN GIAO HÀNG</div>", unsafe_allow_html=True)
         st.markdown("<p style='background-color: #FFF3CD; padding: 10px; border-radius: 5px; font-weight: bold; color: #856404;'>⚠️ Mọi người dò thiệt kỹ phần địa chỉ có đúng với SAU SÁP NHẬP chưa nha, phần nào chưa đúng mọi người nhớ chọn lại. Sau khi chọn lại mọi người NHỚ TICK VÀO Ô XÁC NHẬN nhé.</p>", unsafe_allow_html=True)
         
-        # Cố gắng match đúng tên cột theo brief của Phương (đề phòng dư khoảng trắng)
         def get_val(r, col_name):
             if col_name in r.index:
                 return str(r[col_name]).replace('nan', '').strip()
@@ -191,15 +211,15 @@ with tab1:
             input_sdt = st.text_input("SĐT:", value=val_sdt)
             input_dc = st.text_input("Địa chỉ (Số nhà + Tên đường):", value=val_dc)
             
-            # Xử lý Dropdown
-            idx_tinh = danh_sach_tinh.index(val_tinh) if val_tinh in danh_sach_tinh else 0
+            # Xử lý Dropdown an toàn
+            idx_tinh = find_index_safe(danh_sach_tinh, val_tinh)
             input_tinh = st.selectbox("Tỉnh/ Thành:", options=danh_sach_tinh, index=idx_tinh)
             
             px_options = dict_phuong_xa.get(input_tinh, ["Chưa có dữ liệu"])
-            idx_px = px_options.index(val_px) if val_px in px_options else 0
+            idx_px = find_index_safe(px_options, val_px)
             input_px = st.selectbox("Phường/ Xã:", options=px_options, index=idx_px)
             
-            # Khung cảnh báo tick (Làm nổi bật không dùng ✅)
+            # Khung cảnh báo tick đỏ nổi bật (Bỏ dấu tick ✅)
             st.markdown("<div style='background-color: #F8D7DA; color: #721C24; padding: 10px; border-radius: 5px; font-weight: bold; border: 1px solid #F5C6CB; margin-top: 15px; margin-bottom: 5px; text-align: center;'>👇 BẠN VUI LÒNG TICK VÀO Ô BÊN DƯỚI SAU KHI ĐÃ KIỂM TRA KỸ CÀNG NHA</div>", unsafe_allow_html=True)
             is_correct = st.checkbox("TÔI ĐÃ KIỂM TRA KỸ THÔNG TIN GIAO HÀNG", value=False)
         else:
@@ -211,14 +231,12 @@ with tab1:
         st.markdown("<div class='section-title'>🎁 THÔNG TIN GIFT</div>", unsafe_allow_html=True)
         
         for idx_order, order_row in user_orders.iterrows():
-            # Xử lý format Project (In đậm, màu đỏ đô, viết hoa)
             proj_raw = str(order_row.get('Project tham gia', '')).replace('nan', '').strip()
             proj_display = f"<b><span style='color: #8B0000;'>{proj_raw.upper()}</span></b>" if proj_raw else ""
             
-            # Xử lý format Số tiền / Số vote
             tien_vote_raw = str(order_row.get('Số tiền/ Số vote', '')).replace('nan', '').strip()
             if tien_vote_raw.endswith('.0'):
-                tien_vote_raw = tien_vote_raw[:-2] # Ép loại bỏ .0 bằng string slice thay vì số học
+                tien_vote_raw = tien_vote_raw[:-2]
                 
             tien_vote_display = tien_vote_raw
             if tien_vote_raw.isdigit():
@@ -263,7 +281,6 @@ with tab1:
                     st.error("⚠️ BẠN CHƯA TICK XÁC NHẬN THÔNG TIN GIAO HÀNG. Vui lòng tick vào ô xác nhận trước khi lưu nhé!")
                 else:
                     with st.spinner("Đang lưu thông tin vào hệ thống..."):
-                        # So sánh để ra trạng thái (Các giá trị này đều đã được cắt .0 và khoảng trắng chuẩn chỉnh)
                         ss_sdt = (input_sdt.strip() == goc_sdt)
                         ss_dc = (input_dc.strip() == goc_dc)
                         ss_px = (input_px.strip() == goc_px)
@@ -275,14 +292,12 @@ with tab1:
                         df_source = conn_update.read(spreadsheet=url, worksheet="Source")
                         df_source.columns = df_source.columns.str.strip()
                         
-                        # Fix dứt điểm lỗi TypeError Float64 & mất số 0
                         def fix_sdt_source(x):
                             s = str(x).replace("'", "").replace('.0', '').strip()
                             if s.lower() in ['nan', 'none', '<na>', 'nat', '']: return ""
                             if s.isdigit() and not s.startswith('0'): return '0' + s
                             return s
                             
-                        # Chuyển đổi an toàn sang kiểu String cho các cột chuẩn bị Ghi Đè (Tránh lỗi Dtype)
                         cols_to_update = ['Checked SDT', 'Checked Địa chỉ', 'Checked Phường xã', 'Check Tỉnh thành', 'Note', 'Trạng thái xác nhận']
                         for c in cols_to_update:
                             if c not in df_source.columns:
@@ -294,28 +309,28 @@ with tab1:
 
                         df_source['Temp_Phone'] = df_source['SDT'].apply(lambda x: x.lstrip('0'))
                         
-                        # Thực hiện cập nhật Data
                         for s_idx in df_source.index:
                             if df_source.at[s_idx, 'Temp_Phone'] == clean_input:
-                                df_source.at[s_idx, 'Checked SDT'] = input_sdt.strip() # Bỏ bọc dấu nháy '
+                                df_source.at[s_idx, 'Checked SDT'] = input_sdt.strip()
                                 df_source.at[s_idx, 'Checked Địa chỉ'] = input_dc.strip()
                                 df_source.at[s_idx, 'Checked Phường xã'] = input_px.strip()
                                 df_source.at[s_idx, 'Check Tỉnh thành'] = input_tinh.strip()
                                 df_source.at[s_idx, 'Note'] = input_note.strip()
                                 df_source.at[s_idx, 'Trạng thái xác nhận'] = tt_moi
                         
-                        # Xóa cột Temp trước khi up
                         df_source = df_source.drop(columns=['Temp_Phone'])
                         
                         conn_update.update(spreadsheet=url, worksheet="Source", data=df_source)
                         st.cache_data.clear() 
                         
-                        # Hiệu ứng mầm non qua Toast và Banner Success
-                        st.success(f"🌿🌱 ĐÃ LƯU HỆ THỐNG VỚI TRẠNG THÁI: **{tt_moi.upper()}**! 🌱🌿")
-                        st.toast("🌱 Khởi đầu mới! Chốt đơn thành công! 🌿", icon="🌱")
-                        
-                        # Xóa session để quay về màn hình đầu
+                        # Set thông báo thành công và xóa trắng ô SĐT
+                        st.session_state['show_success'] = True
+                        st.session_state['success_msg'] = f"ĐÃ LƯU HỆ THỐNG VỚI TRẠNG THÁI: **{tt_moi.upper()}**!"
+                        st.session_state['phone_query'] = ""
                         del st.session_state['verified_phone']
+                        
+                        # Chạy lại app ngay lập tức để hiện tuyết và mầm non
+                        st.rerun()
 
 
 # ================= TAB 2: ADMIN CONFIRM =================
@@ -356,7 +371,6 @@ with tab2:
         
         df_export_raw = df_app.copy()
         
-        # Hàm fix triệt để lỗi KeyError bất kể dư khoảng trắng trong tên Cột
         map_cols = [('Checked SDT', 'SDT'), ('Checked Địa chỉ', 'Địa chỉ mới'), 
                     ('Checked Phường xã', 'Phường/Xã mới'), ('Check Tỉnh thành', 'Tỉnh/Thành mới')]
                     
@@ -368,7 +382,6 @@ with tab2:
                 df_export_raw[actual_old] = df_export_raw[actual_new].replace(['', 'nan', 'None'], pd.NA).fillna(df_export_raw[actual_old])
         
         def gop_diachi_admin(r):
-            # Tìm chính xác tên cột chứa dữ liệu tương ứng (Xóa khoảng trắng thừa)
             actual_dc = next((col for col in r.index if "địachỉmới" in str(col).lower().replace(" ", "")), None)
             actual_px = next((col for col in r.index if "phường/xãmới" in str(col).lower().replace(" ", "")), None)
             actual_tt = next((col for col in r.index if "tỉnh/thànhmới" in str(col).lower().replace(" ", "")), None)
@@ -381,13 +394,13 @@ with tab2:
             
         df_export_raw['Full_Address'] = df_export_raw.apply(gop_diachi_admin, axis=1)
         
+        # ÉP KIỂU STRING BẢO VỆ CHỐNG LỖI FLOAT/NAN
         for p in GIFT_COLS:
-            df_export_raw[p] = df_export_raw[p].astype(str).apply(lambda x: 1 if x.strip().lower() == 'x' else 0)
+            df_export_raw[p] = df_export_raw[p].apply(lambda x: 1 if str(x).strip().lower() == 'x' else 0)
         
         agg_dict = {'Họ tên': 'first', 'Full_Address': 'first'}
         for p in GIFT_COLS: agg_dict[p] = 'sum'
         
-        # Gộp nhóm
         df_grouped = df_export_raw.groupby('SDT', as_index=False).agg(agg_dict)
         
         if st.button("Tải File Excel GHTK"):
