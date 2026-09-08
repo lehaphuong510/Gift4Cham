@@ -24,6 +24,13 @@ st.markdown("""
     .section-title { background: linear-gradient(90deg, #8B0000 0%, #F4C430 100%); color: white; padding: 12px 15px; border-radius: 8px 8px 0 0; font-size: 16px; font-weight: bold; margin-top: 25px; text-transform: uppercase; }
     .info-box { background-color: #FAFAFA; border: 1px solid #E0E6ED; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     .gift-card { background-color: #FFF9E6; border-left: 5px solid #8B0000; border-radius: 8px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    
+    .custom-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 20px; border: 1px solid #E0E6ED; border-top: none; border-radius: 0 0 8px 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow: hidden; }
+    .custom-table thead tr { background-color: #5E0000; } 
+    .custom-table th { color: white; padding: 12px 14px; text-align: center; font-size: 15px; border: none; }
+    .custom-table th:first-child { text-align: left; }
+    .custom-table td { padding: 14px; border-bottom: 1px solid #EEEEEE; border-right: 1px solid #EEEEEE; text-align: center; font-weight: bold; }
+    .custom-table td:first-child { text-align: left; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -74,14 +81,15 @@ def load_data():
     df_dvhc = conn.read(spreadsheet=url, worksheet="Data_DVHC")
     df_dvhc.columns = df_dvhc.columns.str.strip()
     
-    # Bê nguyên xi hàm fix gốc của Phương
     def fix_sdt(x):
-        s = str(x).replace('.0', '').replace("'", "").strip()
+        if pd.isna(x): return ""
+        s = str(x).replace("'", "").strip()
         if s.lower() in ['nan', 'none', '<na>', 'nat', '']: 
             return ""
-        s_clean = s.replace(" ", "").replace(".", "")
-        if s_clean.isdigit() and not s.startswith('0'): 
-            s = '0' + s
+        if s.endswith('.0'): 
+            s = s[:-2]
+        if s.isdigit() and not s.startswith('0'): 
+            return '0' + s
         return s
         
     for col in ['SDT', 'Checked SDT']:
@@ -92,6 +100,7 @@ def load_data():
 
 try:
     df_app, df_dvhc = load_data()
+    # Lấy danh sách Hành chính
     danh_sach_tinh_goc = df_dvhc['Tỉnh thành'].dropna().unique().tolist()
     danh_sach_tinh_goc = [str(t).strip() for t in danh_sach_tinh_goc if str(t).strip() != '']
     
@@ -103,6 +112,7 @@ except Exception as e:
     st.error("Đang có lỗi kết nối dữ liệu. Vui lòng thử lại sau!")
     st.stop()
 
+# Hàm so khớp dropdown siêu an toàn
 def find_index_safe(options_list, val):
     val_clean = str(val).strip().lower()
     if not val_clean or val_clean in ['nan', 'none', '']: return 0
@@ -147,6 +157,7 @@ with tab1:
         
         is_locked = is_form_locked()
         
+        # Lời chào
         if tt_xacnhan in ["Đã xác nhận", "Đã cập nhật"]:
             st.success(f"🎉 Chào {nickname.upper()} ơi, bạn đã {tt_xacnhan.lower()} thông tin thành công rồi nha, dưới đây là kết quả cuối cùng của bạn!")
         else:
@@ -291,14 +302,12 @@ with tab1:
                         df_source = conn_update.read(spreadsheet=url, worksheet="Source")
                         df_source.columns = df_source.columns.str.strip()
                         
-                        # --- TRẢ VỀ Y NGUYÊN LOGIC FIX SỐ CỦA PHƯƠNG ---
                         def clean_phone_for_gsheets(x):
                             s = str(x).replace('.0', '').replace("'", "").strip()
                             if s.lower() in ['nan', 'none', '<na>', 'nat', '']: return ""
                             if s.isdigit() and not s.startswith('0'): return '0' + s
                             return s
                             
-                        # Ép object để bypass lỗi float của pandas
                         cols_to_update = ['Checked SDT', 'Checked Địa chỉ', 'Checked Phường xã', 'Check Tỉnh thành', 'Note', 'Trạng thái xác nhận']
                         for c in cols_to_update:
                             if c not in df_source.columns:
@@ -314,7 +323,6 @@ with tab1:
                         
                         for s_idx in df_source.index:
                             if df_source.at[s_idx, 'Temp_Phone'] == clean_input:
-                                # GHI THẲNG, TUYỆT ĐỐI KHÔNG BỌC DẤU NHÁY NÀO CẢ
                                 df_source.at[s_idx, 'Checked SDT'] = input_sdt.strip()
                                 df_source.at[s_idx, 'Checked Địa chỉ'] = input_dc.strip()
                                 df_source.at[s_idx, 'Checked Phường xã'] = input_px.strip()
@@ -367,6 +375,36 @@ with tab2:
         col2.metric("👌 Chỉ Xác Nhận", c_xacnhan)
         col3.metric("✍️ Có Cập Nhật", c_capnhat)
         col4.metric("⏳ Đang chờ", c_chuaxacnhan)
+
+        st.divider()
+
+        # ================= THỐNG KÊ QUÀ TẶNG =================
+        st.markdown("#### 🎁 THỐNG KÊ TỔNG SỐ LƯỢNG QUÀ")
+        
+        gift_counts = {}
+        for p in GIFT_COLS:
+            count = df_app[p].astype(str).apply(lambda x: 1 if x.strip().lower() == 'x' else 0).sum()
+            gift_counts[p] = count
+            
+        cols_gift = st.columns(2)
+        
+        html_tk1 = "<table class='custom-table'><thead><tr><th>Loại Quà</th><th>Số lượng</th></tr></thead><tbody>"
+        html_tk2 = "<table class='custom-table'><thead><tr><th>Loại Quà</th><th>Số lượng</th></tr></thead><tbody>"
+        
+        half = len(GIFT_COLS) // 2
+        for i, p in enumerate(GIFT_COLS):
+            val = gift_counts[p]
+            row_html = f"<tr><td>{p}</td><td><span style='color: #8B0000; font-weight: bold;'>{val}</span></td></tr>"
+            if i < half:
+                html_tk1 += row_html
+            else:
+                html_tk2 += row_html
+                
+        html_tk1 += "</tbody></table>"
+        html_tk2 += "</tbody></table>"
+        
+        cols_gift[0].markdown(html_tk1, unsafe_allow_html=True)
+        cols_gift[1].markdown(html_tk2, unsafe_allow_html=True)
 
         st.divider()
         
