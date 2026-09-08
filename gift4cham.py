@@ -33,7 +33,7 @@ st.markdown("<h1 style='text-align: center; color: #8B0000; margin-bottom: 10px;
 if st.session_state.get('show_success', False):
     st.snow()
     st.toast("🌱 Khởi đầu mới! Chốt đơn thành công! 🌿", icon="🌱")
-    st.success(f"✅ {st.session_state.get('success_msg', 'ĐÃ LƯU HỆ THỐNG THÀNH CÔNG!')} Cảm ơn bạn rất nhiều 💖")
+    st.success(st.session_state.get('success_msg', '🌱 Bạn đã cập nhật thông tin thành công rồi nha ❤️'))
     st.session_state['show_success'] = False
 
 # Nút Refresh
@@ -54,7 +54,6 @@ def set_form_lock(locked):
     else:
         if os.path.exists(LOCK_FILE): os.remove(LOCK_FILE)
 
-# Danh sách quà tặng chuẩn từ data
 GIFT_COLS = ['Keyring 9M', 'Bandana', 'Sticker', 'Standee acrylic', 'Vòng tay Xiếm xỏ', 
              'Quạt Liên tâm', 'Card pola', 'Card xịt nước', 'Bông dặm phấn', 'Dù nóng bỏng', 
              'Thảm xiếm may', 'Áo RM']
@@ -95,10 +94,11 @@ def load_data():
 try:
     df_app, df_dvhc = load_data()
     # Lấy danh sách Hành chính
-    danh_sach_tinh = df_dvhc['Tỉnh thành'].dropna().unique().tolist()
-    danh_sach_tinh = [str(t).strip() for t in danh_sach_tinh if str(t).strip() != '']
+    danh_sach_tinh_goc = df_dvhc['Tỉnh thành'].dropna().unique().tolist()
+    danh_sach_tinh_goc = [str(t).strip() for t in danh_sach_tinh_goc if str(t).strip() != '']
+    
     dict_phuong_xa = {}
-    for tinh in danh_sach_tinh:
+    for tinh in danh_sach_tinh_goc:
         phuong = df_dvhc[df_dvhc['Tỉnh thành'] == tinh]['Phường xã'].dropna().unique().tolist()
         dict_phuong_xa[tinh] = [str(p).strip() for p in phuong if str(p).strip() != '']
 except Exception as e:
@@ -108,6 +108,7 @@ except Exception as e:
 # Hàm so khớp dropdown siêu an toàn
 def find_index_safe(options_list, val):
     val_clean = str(val).strip().lower()
+    if not val_clean or val_clean in ['nan', 'none', '']: return 0
     for i, opt in enumerate(options_list):
         if str(opt).strip().lower() == val_clean:
             return i
@@ -119,7 +120,6 @@ tab1, tab2 = st.tabs(["🔍 XÁC NHẬN ĐƠN HÀNG", "🔒 ADMIN"])
 with tab1:
     st.markdown("### Nhập SĐT để kiểm tra phần quà của bạn")
     
-    # Sử dụng search_key để tạo key động cho text_input (Reset cực an toàn không lỗi)
     if 'search_key' not in st.session_state:
         st.session_state['search_key'] = 0
         
@@ -208,21 +208,25 @@ with tab1:
         # Render Form UI
         if not is_locked:
             input_sdt = st.text_input("SĐT:", value=val_sdt)
-            input_dc = st.text_input("Địa chỉ (Số nhà + Tên đường):", value=val_dc)
+            input_dc = st.text_input("Địa chỉ (Số nhà + Tên đường):", value=val_dc, placeholder="Vui lòng điền địa chỉ...")
             
-            # Xử lý Dropdown an toàn
-            idx_tinh = find_index_safe(danh_sach_tinh, val_tinh)
-            input_tinh = st.selectbox("Tỉnh/ Thành:", options=danh_sach_tinh, index=idx_tinh)
+            # Cấu hình Dropdown có Placeholder Vui lòng chọn
+            options_tinh = [" Vui lòng chọn..."] + danh_sach_tinh_goc
+            idx_tinh = find_index_safe(options_tinh, val_tinh)
+            input_tinh = st.selectbox("Tỉnh/ Thành:", options=options_tinh, index=idx_tinh)
             
-            px_options = dict_phuong_xa.get(input_tinh, ["Chưa có dữ liệu"])
-            idx_px = find_index_safe(px_options, val_px)
-            input_px = st.selectbox("Phường/ Xã:", options=px_options, index=idx_px)
+            if input_tinh == " Vui lòng chọn...":
+                options_px = [" Vui lòng chọn..."]
+            else:
+                options_px = [" Vui lòng chọn..."] + dict_phuong_xa.get(input_tinh, [])
+                
+            idx_px = find_index_safe(options_px, val_px)
+            input_px = st.selectbox("Phường/ Xã:", options=options_px, index=idx_px)
             
-            # Khung cảnh báo tick đỏ nổi bật
             st.markdown("<div style='background-color: #F8D7DA; color: #721C24; padding: 10px; border-radius: 5px; font-weight: bold; border: 1px solid #F5C6CB; margin-top: 15px; margin-bottom: 5px; text-align: center;'>👇 BẠN VUI LÒNG TICK VÀO Ô BÊN DƯỚI SAU KHI ĐÃ KIỂM TRA KỸ CÀNG NHA</div>", unsafe_allow_html=True)
             is_correct = st.checkbox("TÔI ĐÃ KIỂM TRA KỸ THÔNG TIN GIAO HÀNG", value=False)
         else:
-            st.markdown(f"<div class='info-box'><b>SĐT:</b> {val_sdt}<br><b>Địa chỉ:</b> {val_dc}<br><b>Phường/ Xã:</b> {val_px}<br><b>Tỉnh/ Thành:</b> {val_tinh}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='info-box'><b>SĐT:</b> {val_sdt}<br><b>Địa chỉ:</b> {val_dc if val_dc else '<i>Chưa có</i>'}<br><b>Phường/ Xã:</b> {val_px if val_px else '<i>Chưa có</i>'}<br><b>Tỉnh/ Thành:</b> {val_tinh if val_tinh else '<i>Chưa có</i>'}</div>", unsafe_allow_html=True)
             input_sdt, input_dc, input_tinh, input_px = val_sdt, val_dc, val_tinh, val_px
             is_correct = True
 
@@ -276,7 +280,10 @@ with tab1:
         # ================= NÚT CHỐT ĐƠN =================
         if not is_locked:
             if st.button("🚀 XÁC NHẬN / CẬP NHẬT THÔNG TIN", type="primary"):
-                if not is_correct:
+                # Bắt lỗi nhập liệu trống
+                if input_tinh == " Vui lòng chọn..." or input_px == " Vui lòng chọn..." or input_dc.strip() == "":
+                    st.error("⚠️ Bạn vui lòng điền và chọn đầy đủ thông tin Tỉnh thành, Phường xã và Địa chỉ nhé!")
+                elif not is_correct:
                     st.error("⚠️ BẠN CHƯA TICK XÁC NHẬN THÔNG TIN GIAO HÀNG. Vui lòng tick vào ô xác nhận trước khi lưu nhé!")
                 else:
                     with st.spinner("Đang lưu thông tin vào hệ thống..."):
@@ -291,11 +298,16 @@ with tab1:
                         df_source = conn_update.read(spreadsheet=url, worksheet="Source")
                         df_source.columns = df_source.columns.str.strip()
                         
-                        def fix_sdt_source(x):
-                            s = str(x).replace("'", "").replace('.0', '').strip()
-                            if s.lower() in ['nan', 'none', '<na>', 'nat', '']: return ""
-                            if s.isdigit() and not s.startswith('0'): return '0' + s
-                            return s
+                        # Chặn triệt để lỗi ép kiểu số của Google Sheets
+                        def force_string_for_gsheets(val):
+                            v = str(val).replace("'", "").replace(".0", "").strip()
+                            if v.lower() in ['nan', 'none', '<na>', 'nat', '']: return ""
+                            # Bọc 100% SĐT bằng nháy đơn để Google Sheets giữ nguyên format văn bản
+                            if v.isdigit():
+                                if not v.startswith('0'):
+                                    v = '0' + v
+                                return f"'{v}"
+                            return v
                             
                         cols_to_update = ['Checked SDT', 'Checked Địa chỉ', 'Checked Phường xã', 'Check Tỉnh thành', 'Note', 'Trạng thái xác nhận']
                         for c in cols_to_update:
@@ -304,13 +316,18 @@ with tab1:
                             df_source[c] = df_source[c].fillna("").astype(str)
                             
                         if 'SDT' in df_source.columns:
-                            df_source['SDT'] = df_source['SDT'].fillna("").astype(str).apply(fix_sdt_source)
+                            df_source['SDT'] = df_source['SDT'].apply(force_string_for_gsheets)
+                        if 'Checked SDT' in df_source.columns:
+                            df_source['Checked SDT'] = df_source['Checked SDT'].apply(force_string_for_gsheets)
 
-                        df_source['Temp_Phone'] = df_source['SDT'].apply(lambda x: x.lstrip('0'))
+                        # Match SĐT (đã bỏ nháy đơn để so sánh)
+                        df_source['Temp_Phone'] = df_source['SDT'].apply(lambda x: x.replace("'", "").lstrip('0'))
                         
                         for s_idx in df_source.index:
                             if df_source.at[s_idx, 'Temp_Phone'] == clean_input:
-                                df_source.at[s_idx, 'Checked SDT'] = input_sdt.strip()
+                                # Nhớ thêm 1 dấu nháy để khóa định dạng Text trên Sheet
+                                sdt_save = input_sdt.strip()
+                                df_source.at[s_idx, 'Checked SDT'] = f"'{sdt_save}" if sdt_save else ""
                                 df_source.at[s_idx, 'Checked Địa chỉ'] = input_dc.strip()
                                 df_source.at[s_idx, 'Checked Phường xã'] = input_px.strip()
                                 df_source.at[s_idx, 'Check Tỉnh thành'] = input_tinh.strip()
@@ -322,10 +339,13 @@ with tab1:
                         conn_update.update(spreadsheet=url, worksheet="Source", data=df_source)
                         st.cache_data.clear() 
                         
-                        # Set thông báo thành công và xóa trắng ô SĐT bằng cách đổi key động
                         st.session_state['show_success'] = True
-                        st.session_state['success_msg'] = f"ĐÃ LƯU HỆ THỐNG VỚI TRẠNG THÁI: **{tt_moi.upper()}**!"
-                        st.session_state['search_key'] += 1 # 👈 Tuyệt chiêu reset an toàn
+                        if tt_moi == "Đã xác nhận":
+                            st.session_state['success_msg'] = "🌱 Bạn đã xác nhận thông tin thành công rồi nha ❤️"
+                        else:
+                            st.session_state['success_msg'] = "🌱 Bạn đã cập nhật thông tin thành công rồi nha ❤️"
+                            
+                        st.session_state['search_key'] += 1
                         del st.session_state['verified_phone']
                         
                         st.rerun()
@@ -347,17 +367,15 @@ with tab2:
         st.divider()
 
         # ================= TIẾN ĐỘ XÁC NHẬN =================
-        total_orders = len(df_app)
-        df_xacnhan = df_app[df_app['Trạng thái xác nhận'].astype(str).str.strip() == 'Đã xác nhận']
-        df_capnhat = df_app[df_app['Trạng thái xác nhận'].astype(str).str.strip() == 'Đã cập nhật']
-        
-        c_xacnhan = len(df_xacnhan)
-        c_capnhat = len(df_capnhat)
+        df_unique_phones = df_app.drop_duplicates(subset=['SDT']).copy()
+        total_orders = len(df_unique_phones)
+        c_xacnhan = len(df_unique_phones[df_unique_phones['Trạng thái xác nhận'].astype(str).str.strip() == 'Đã xác nhận'])
+        c_capnhat = len(df_unique_phones[df_unique_phones['Trạng thái xác nhận'].astype(str).str.strip() == 'Đã cập nhật'])
         c_chuaxacnhan = total_orders - c_xacnhan - c_capnhat
         
-        st.markdown("#### 📦 TIẾN ĐỘ XÁC NHẬN THÔNG TIN TỔNG")
+        st.markdown("#### 📦 TIẾN ĐỘ XÁC NHẬN THÔNG TIN TỔNG (Tính theo Số Điện Thoại)")
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("📦 Tổng lượt tham gia", total_orders)
+        col1.metric("📦 Tổng SĐT", total_orders)
         col2.metric("👌 Chỉ Xác Nhận", c_xacnhan)
         col3.metric("✍️ Có Cập Nhật", c_capnhat)
         col4.metric("⏳ Đang chờ", c_chuaxacnhan)
@@ -368,7 +386,9 @@ with tab2:
         st.markdown("### 🖨️ XUẤT FILE EXCEL GHTK & LABEL (TỰ ĐỘNG GỘP ĐƠN)")
         
         df_export_raw = df_app.copy()
-        
+        if 'Mã vận đơn' not in df_export_raw.columns:
+            df_export_raw['Mã vận đơn'] = ""
+            
         map_cols = [('Checked SDT', 'SDT'), ('Checked Địa chỉ', 'Địa chỉ mới'), 
                     ('Checked Phường xã', 'Phường/Xã mới'), ('Check Tỉnh thành', 'Tỉnh/Thành mới')]
                     
@@ -392,11 +412,10 @@ with tab2:
             
         df_export_raw['Full_Address'] = df_export_raw.apply(gop_diachi_admin, axis=1)
         
-        # ÉP KIỂU STRING BẢO VỆ CHỐNG LỖI FLOAT/NAN
         for p in GIFT_COLS:
             df_export_raw[p] = df_export_raw[p].apply(lambda x: 1 if str(x).strip().lower() == 'x' else 0)
         
-        agg_dict = {'Họ tên': 'first', 'Full_Address': 'first'}
+        agg_dict = {'Họ tên': 'first', 'Full_Address': 'first', 'Mã vận đơn': 'first'}
         for p in GIFT_COLS: agg_dict[p] = 'sum'
         
         df_grouped = df_export_raw.groupby('SDT', as_index=False).agg(agg_dict)
@@ -405,7 +424,8 @@ with tab2:
             df_ghtk = pd.DataFrame()
             df_ghtk['Mã ĐH riêng'] = ""
             df_ghtk['Tên khách hàng'] = df_grouped['Họ tên']
-            df_ghtk['SĐT'] = df_grouped['SDT'].apply(lambda x: f"'{x}")
+            # Cố tình KHÔNG chèn dấu nháy vào File xuất Excel
+            df_ghtk['SĐT'] = df_grouped['SDT'].astype(str)
             df_ghtk['Địa chỉ chi tiết'] = df_grouped['Full_Address']
             
             def lay_ten_sp(row):
@@ -462,6 +482,7 @@ with tab2:
                 return html
 
             for _, row in df_grouped.iterrows():
+                mvd = str(row.get('Mã vận đơn', '')).replace('nan', '').strip()
                 ten = str(row.get('Họ tên', '')).replace('nan', '')
                 sdt = str(row.get('SDT', '')).replace('.0', '').replace("'", "")
                 diachi = str(row.get('Full_Address', '')).replace('nan', '')
@@ -470,9 +491,11 @@ with tab2:
                 h_c2 = render_gift_col(row, col2_gifts)
                 h_c3 = render_gift_col(row, col3_gifts)
 
+                # Phục hồi dòng Mã Vận Đơn ở Label
                 html_content += f"""
                     <div class="label-box">
-                        <div class="title">👤 <b>{ten}</b> | 📞 {sdt}</div>
+                        <div class="title">📦 MÃ VĐ: {mvd}</div>
+                        <div class="info">👤 <b>{ten}</b> | 📞 {sdt}</div>
                         <div class="info">🏠 {diachi}</div>
                         <div class="products" style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 14px;">
                             {h_c1}{h_c2}{h_c3}
