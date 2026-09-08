@@ -6,7 +6,7 @@ import io
 from streamlit_gsheets import GSheetsConnection
 
 # ================= 1. CẤU HÌNH TRANG & GIAO DIỆN =================
-st.set_page_config(page_title="XÁC NHẬN THÔNG TIN TẶNG GIFT", page_icon="🎁", layout="centered")
+st.set_page_config(page_title="GIFT FOR DONOR", page_icon="🎁", layout="centered")
 
 # MÀU ĐỎ ĐÔ #8B0000 thay cho xanh dương cũ
 st.markdown("""
@@ -36,7 +36,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<h1 style='text-align: center; color: #8B0000; margin-bottom: 10px;'>🎁 XÁC NHẬN THÔNG TIN TẶNG GIFT</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #8B0000; margin-bottom: 10px;'>🎁 GIFT FOR DONOR</h1>", unsafe_allow_html=True)
 
 # Nút Refresh
 col_rf1, col_rf2 = st.columns([1, 3])
@@ -213,8 +213,23 @@ with tab1:
         st.markdown("<div class='section-title'>🎁 THÔNG TIN GIFT</div>", unsafe_allow_html=True)
         
         for idx_order, order_row in user_orders.iterrows():
-            proj = str(order_row.get('Project tham gia', '')).replace('nan', '')
-            tien_vote = str(order_row.get('Số tiền/ Số vote', '')).replace('nan', '')
+            # Xử lý format Project
+            proj_raw = str(order_row.get('Project tham gia', '')).replace('nan', '').strip()
+            proj_display = f"<b><span style='color: #8B0000;'>{proj_raw.upper()}</span></b>" if proj_raw else ""
+            
+            # Xử lý format Số tiền / Số vote
+            tien_vote_raw = str(order_row.get('Số tiền/ Số vote', '')).replace('nan', '').strip()
+            # Gọt đuôi .0 bằng cách cắt chuỗi để không thay đổi định dạng gốc
+            if tien_vote_raw.endswith('.0'):
+                tien_vote_raw = tien_vote_raw[:-2]
+                
+            tien_vote_display = tien_vote_raw
+            if tien_vote_raw.isdigit():
+                val_num = int(tien_vote_raw)
+                if val_num > 1000:
+                    tien_vote_display = f"{val_num:,.0f} VNĐ"
+                else:
+                    tien_vote_display = f"{val_num} vote"
             
             gift_list = []
             for col_g in GIFT_COLS:
@@ -226,8 +241,8 @@ with tab1:
             
             card_html = f"""
             <div class='gift-card'>
-                <div style='margin-bottom: 5px;'><b>Project bạn đã tham gia:</b> <span style='color: #0B192C;'>{proj}</span></div>
-                <div style='margin-bottom: 5px;'><b>Số tiền/ số vote bạn đã đóng góp:</b> <span style='color: #E74C3C; font-weight: bold;'>{tien_vote}</span></div>
+                <div style='margin-bottom: 5px;'><b>Project bạn đã tham gia:</b> {proj_display}</div>
+                <div style='margin-bottom: 5px;'><b>Số tiền/ số vote bạn đã đóng góp:</b> <span style='color: #E74C3C; font-weight: bold;'>{tien_vote_display}</span></div>
                 <div style='margin-top: 10px; border-top: 1px dashed #ccc; padding-top: 10px;'>
                     <b>Quà gửi tặng bạn:</b><br>{str_gifts}
                 </div>
@@ -262,6 +277,13 @@ with tab1:
                         conn_update = st.connection("gsheets", type=GSheetsConnection)
                         df_source = conn_update.read(spreadsheet=url, worksheet="Source")
                         df_source.columns = df_source.columns.str.strip()
+                        
+                        # Fix lỗi TypeError do dtype: Ép toàn bộ các cột chuẩn bị ghi về định dạng chuỗi tự do (object)
+                        cols_to_update = ['Checked SDT', 'Checked Địa chỉ', 'Checked Phường xã', 'Check Tỉnh thành', 'Note', 'Trạng thái xác nhận']
+                        for c in cols_to_update:
+                            if c not in df_source.columns:
+                                df_source[c] = ""
+                            df_source[c] = df_source[c].astype(object)
                         
                         # Tẩy trần SĐT bên Source trước khi map index
                         def fix_sdt_source(x):
