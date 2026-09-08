@@ -82,12 +82,9 @@ def load_data():
     df_dvhc.columns = df_dvhc.columns.str.strip()
     
     def fix_sdt(x):
-        if pd.isna(x): return ""
-        s = str(x).replace("'", "").strip()
+        s = str(x).replace('.0', '').replace("'", "").strip()
         if s.lower() in ['nan', 'none', '<na>', 'nat', '']: 
             return ""
-        if s.endswith('.0'): 
-            s = s[:-2]
         if s.isdigit() and not s.startswith('0'): 
             return '0' + s
         return s
@@ -383,7 +380,8 @@ with tab2:
         
         gift_counts = {}
         for p in GIFT_COLS:
-            count = df_app[p].astype(str).apply(lambda x: 1 if x.strip().lower() == 'x' else 0).sum()
+            # FIX: Bọc str(x) để chống lỗi AttributeError y như khúc xuất Excel
+            count = df_app[p].apply(lambda x: 1 if str(x).strip().lower() == 'x' else 0).sum()
             gift_counts[p] = count
             
         cols_gift = st.columns(2)
