@@ -119,14 +119,13 @@ tab1, tab2 = st.tabs(["🔍 XÁC NHẬN ĐƠN HÀNG", "🔒 ADMIN"])
 with tab1:
     st.markdown("### Nhập SĐT để kiểm tra phần quà của bạn")
     
-    # Quản lý state cho ô tìm kiếm
-    if 'phone_query' not in st.session_state:
-        st.session_state['phone_query'] = ""
+    # Sử dụng search_key để tạo key động cho text_input (Reset cực an toàn không lỗi)
+    if 'search_key' not in st.session_state:
+        st.session_state['search_key'] = 0
         
-    st.text_input("Nhập số điện thoại của bạn:", key="phone_query", placeholder="Ví dụ: 0901234567")
+    phone_input = st.text_input("Nhập số điện thoại của bạn:", key=f"phone_query_{st.session_state['search_key']}", placeholder="Ví dụ: 0901234567")
     
     if st.button("KIỂM TRA 🚀", type="primary"):
-        phone_input = st.session_state['phone_query']
         if phone_input:
             clean_input = phone_input.strip().lstrip('0')
             df_app['Phone_Compare'] = df_app['SDT'].astype(str).str.lstrip('0')
@@ -219,7 +218,7 @@ with tab1:
             idx_px = find_index_safe(px_options, val_px)
             input_px = st.selectbox("Phường/ Xã:", options=px_options, index=idx_px)
             
-            # Khung cảnh báo tick đỏ nổi bật (Bỏ dấu tick ✅)
+            # Khung cảnh báo tick đỏ nổi bật
             st.markdown("<div style='background-color: #F8D7DA; color: #721C24; padding: 10px; border-radius: 5px; font-weight: bold; border: 1px solid #F5C6CB; margin-top: 15px; margin-bottom: 5px; text-align: center;'>👇 BẠN VUI LÒNG TICK VÀO Ô BÊN DƯỚI SAU KHI ĐÃ KIỂM TRA KỸ CÀNG NHA</div>", unsafe_allow_html=True)
             is_correct = st.checkbox("TÔI ĐÃ KIỂM TRA KỸ THÔNG TIN GIAO HÀNG", value=False)
         else:
@@ -323,13 +322,12 @@ with tab1:
                         conn_update.update(spreadsheet=url, worksheet="Source", data=df_source)
                         st.cache_data.clear() 
                         
-                        # Set thông báo thành công và xóa trắng ô SĐT
+                        # Set thông báo thành công và xóa trắng ô SĐT bằng cách đổi key động
                         st.session_state['show_success'] = True
                         st.session_state['success_msg'] = f"ĐÃ LƯU HỆ THỐNG VỚI TRẠNG THÁI: **{tt_moi.upper()}**!"
-                        st.session_state['phone_query'] = ""
+                        st.session_state['search_key'] += 1 # 👈 Tuyệt chiêu reset an toàn
                         del st.session_state['verified_phone']
                         
-                        # Chạy lại app ngay lập tức để hiện tuyết và mầm non
                         st.rerun()
 
 
