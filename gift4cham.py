@@ -74,15 +74,14 @@ def load_data():
     df_dvhc = conn.read(spreadsheet=url, worksheet="Data_DVHC")
     df_dvhc.columns = df_dvhc.columns.str.strip()
     
+    # Bê nguyên xi hàm fix gốc của Phương
     def fix_sdt(x):
-        if pd.isna(x): return ""
-        s = str(x).replace("'", "").strip()
+        s = str(x).replace('.0', '').replace("'", "").strip()
         if s.lower() in ['nan', 'none', '<na>', 'nat', '']: 
             return ""
-        if s.endswith('.0'): 
-            s = s[:-2]
-        if s.isdigit() and not s.startswith('0'): 
-            return '0' + s
+        s_clean = s.replace(" ", "").replace(".", "")
+        if s_clean.isdigit() and not s.startswith('0'): 
+            s = '0' + s
         return s
         
     for col in ['SDT', 'Checked SDT']:
@@ -93,7 +92,6 @@ def load_data():
 
 try:
     df_app, df_dvhc = load_data()
-    # Lấy danh sách Hành chính
     danh_sach_tinh_goc = df_dvhc['Tỉnh thành'].dropna().unique().tolist()
     danh_sach_tinh_goc = [str(t).strip() for t in danh_sach_tinh_goc if str(t).strip() != '']
     
@@ -105,7 +103,6 @@ except Exception as e:
     st.error("Đang có lỗi kết nối dữ liệu. Vui lòng thử lại sau!")
     st.stop()
 
-# Hàm so khớp dropdown siêu an toàn
 def find_index_safe(options_list, val):
     val_clean = str(val).strip().lower()
     if not val_clean or val_clean in ['nan', 'none', '']: return 0
@@ -150,7 +147,6 @@ with tab1:
         
         is_locked = is_form_locked()
         
-        # Lời chào
         if tt_xacnhan in ["Đã xác nhận", "Đã cập nhật"]:
             st.success(f"🎉 Chào {nickname.upper()} ơi, bạn đã {tt_xacnhan.lower()} thông tin thành công rồi nha, dưới đây là kết quả cuối cùng của bạn!")
         else:
@@ -205,12 +201,10 @@ with tab1:
         else:
             val_sdt, val_dc, val_tinh, val_px = goc_sdt, goc_dc, goc_tinh, goc_px
 
-        # Render Form UI
         if not is_locked:
             input_sdt = st.text_input("SĐT:", value=val_sdt)
             input_dc = st.text_input("Địa chỉ (Số nhà + Tên đường):", value=val_dc, placeholder="Vui lòng điền địa chỉ...")
             
-            # Cấu hình Dropdown có Placeholder Vui lòng chọn
             options_tinh = [" Vui lòng chọn..."] + danh_sach_tinh_goc
             idx_tinh = find_index_safe(options_tinh, val_tinh)
             input_tinh = st.selectbox("Tỉnh/ Thành:", options=options_tinh, index=idx_tinh)
@@ -280,7 +274,6 @@ with tab1:
         # ================= NÚT CHỐT ĐƠN =================
         if not is_locked:
             if st.button("🚀 XÁC NHẬN / CẬP NHẬT THÔNG TIN", type="primary"):
-                # Bắt lỗi nhập liệu trống
                 if input_tinh == " Vui lòng chọn..." or input_px == " Vui lòng chọn..." or input_dc.strip() == "":
                     st.error("⚠️ Bạn vui lòng điền và chọn đầy đủ thông tin Tỉnh thành, Phường xã và Địa chỉ nhé!")
                 elif not is_correct:
@@ -298,36 +291,31 @@ with tab1:
                         df_source = conn_update.read(spreadsheet=url, worksheet="Source")
                         df_source.columns = df_source.columns.str.strip()
                         
-                        # Chặn triệt để lỗi ép kiểu số của Google Sheets
-                        def force_string_for_gsheets(val):
-                            v = str(val).replace("'", "").replace(".0", "").strip()
-                            if v.lower() in ['nan', 'none', '<na>', 'nat', '']: return ""
-                            # Bọc 100% SĐT bằng nháy đơn để Google Sheets giữ nguyên format văn bản
-                            if v.isdigit():
-                                if not v.startswith('0'):
-                                    v = '0' + v
-                                return f"'{v}"
-                            return v
+                        # --- TRẢ VỀ Y NGUYÊN LOGIC FIX SỐ CỦA PHƯƠNG ---
+                        def clean_phone_for_gsheets(x):
+                            s = str(x).replace('.0', '').replace("'", "").strip()
+                            if s.lower() in ['nan', 'none', '<na>', 'nat', '']: return ""
+                            if s.isdigit() and not s.startswith('0'): return '0' + s
+                            return s
                             
+                        # Ép object để bypass lỗi float của pandas
                         cols_to_update = ['Checked SDT', 'Checked Địa chỉ', 'Checked Phường xã', 'Check Tỉnh thành', 'Note', 'Trạng thái xác nhận']
                         for c in cols_to_update:
                             if c not in df_source.columns:
                                 df_source[c] = ""
-                            df_source[c] = df_source[c].fillna("").astype(str)
+                            df_source[c] = df_source[c].astype(object)
                             
                         if 'SDT' in df_source.columns:
-                            df_source['SDT'] = df_source['SDT'].apply(force_string_for_gsheets)
+                            df_source['SDT'] = df_source['SDT'].astype(object).apply(clean_phone_for_gsheets)
                         if 'Checked SDT' in df_source.columns:
-                            df_source['Checked SDT'] = df_source['Checked SDT'].apply(force_string_for_gsheets)
+                            df_source['Checked SDT'] = df_source['Checked SDT'].astype(object).apply(clean_phone_for_gsheets)
 
-                        # Match SĐT (đã bỏ nháy đơn để so sánh)
-                        df_source['Temp_Phone'] = df_source['SDT'].apply(lambda x: x.replace("'", "").lstrip('0'))
+                        df_source['Temp_Phone'] = df_source['SDT'].astype(str).apply(lambda x: x.replace("'", "").lstrip('0'))
                         
                         for s_idx in df_source.index:
                             if df_source.at[s_idx, 'Temp_Phone'] == clean_input:
-                                # Nhớ thêm 1 dấu nháy để khóa định dạng Text trên Sheet
-                                sdt_save = input_sdt.strip()
-                                df_source.at[s_idx, 'Checked SDT'] = f"'{sdt_save}" if sdt_save else ""
+                                # GHI THẲNG, TUYỆT ĐỐI KHÔNG BỌC DẤU NHÁY NÀO CẢ
+                                df_source.at[s_idx, 'Checked SDT'] = input_sdt.strip()
                                 df_source.at[s_idx, 'Checked Địa chỉ'] = input_dc.strip()
                                 df_source.at[s_idx, 'Checked Phường xã'] = input_px.strip()
                                 df_source.at[s_idx, 'Check Tỉnh thành'] = input_tinh.strip()
@@ -424,7 +412,6 @@ with tab2:
             df_ghtk = pd.DataFrame()
             df_ghtk['Mã ĐH riêng'] = ""
             df_ghtk['Tên khách hàng'] = df_grouped['Họ tên']
-            # Cố tình KHÔNG chèn dấu nháy vào File xuất Excel
             df_ghtk['SĐT'] = df_grouped['SDT'].astype(str)
             df_ghtk['Địa chỉ chi tiết'] = df_grouped['Full_Address']
             
@@ -491,7 +478,6 @@ with tab2:
                 h_c2 = render_gift_col(row, col2_gifts)
                 h_c3 = render_gift_col(row, col3_gifts)
 
-                # Phục hồi dòng Mã Vận Đơn ở Label
                 html_content += f"""
                     <div class="label-box">
                         <div class="title">📦 MÃ VĐ: {mvd}</div>
